@@ -10,16 +10,15 @@ FILE_OUTPUT = "effis_incendi_attivi.geojson"
 def fetch_effis():
     print("📡 Collegamento ai satelliti Copernicus EFFIS...")
     
-   params = {
-    "service": "WFS",
-    "version": "1.1.0",
-    "request": "GetFeature",
-    "typeName": "modis.fire.hotspots",
-    "outputFormat": "application/json",
-    "srsName": "EPSG:4326",
-    "bbox": "15.3,39.8,16.9,41.1,EPSG:4326",
-    "cql_filter": "ACQ_DATE='2025-08-10'" # <--- Forza una data estiva passata
-}
+    params = {
+        "service": "WFS",
+        "version": "1.1.0",
+        "request": "GetFeature",
+        "typeName": "modis.fire.hotspots", 
+        "outputFormat": "application/json",
+        "srsName": "EPSG:4326",
+        "bbox": "15.3,39.8,16.9,41.1,EPSG:4326" 
+    }
 
     try:
         r = requests.get(URL_WFS, params=params, timeout=60)
