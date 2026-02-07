@@ -1,10 +1,9 @@
-name: Sync WebSOR Alert Layer
+name: Sync WebSOR Layer
 
 on:
-  push:
-    paths:
-      - 'dati_bollettino.json'
   workflow_dispatch:
+  schedule:
+    - cron: '30 14 * * *'
 
 permissions:
   contents: write
@@ -18,12 +17,12 @@ jobs:
         with:
           python-version: '3.10'
       - run: pip install requests
-      - name: Esecuzione Master Script
+      - name: Esecuzione Script Master (Oggi e Domani)
         run: python update_bollettino.py
       - name: Commit e Push
         run: |
           git config --global user.name "WebSOR-Bot"
           git config --global user.email "bot@pcbasilicata.it"
-          git add bollettino_comunale_live.geojson
-          git commit -m "Update Allerta Live" || echo "No changes"
+          git add *.geojson
+          git commit -m "Update Allerta Live e Domani" || echo "No changes"
           git push
