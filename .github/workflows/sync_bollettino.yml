@@ -1,0 +1,36 @@
+name: Sync WebSOR Alert Layer
+
+on:
+  push:
+    paths:
+      - 'dati_bollettino.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  update-layer:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run Script
+        run: python update_bollettino.py
+
+      - name: Commit and Push
+        run: |
+          git config --global user.name "WebSOR-Bot"
+          git config --global user.email "bot@pcbasilicata.it"
+          git add bollettino_comunale_live.geojson
+          git commit -m "Aggiornamento live bollettino" || echo "No changes"
+          git push
