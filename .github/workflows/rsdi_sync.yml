@@ -52,3 +52,6 @@ jobs:
           git add rsdi_*.geojson dpc_*.geojson
           git commit -m "Sync automatico RSDI/DPC: $(date +'%d-%m-%Y')" || echo "Nessuna modifica rilevata"
           git push
+
+    - name: 8. Estrazione Incendi EFFIS
+        run: python effis_extractor.py
