@@ -1,1 +1,13 @@
-{"type": "FeatureCollection", "features": [], "note": "Errore download"}
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": { "CONFIDENCE": 100, "BRIGHTNESS": 400, "NOTE": "TEST MANUALE" },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [15.80, 40.64] 
+      }
+    }
+  ]
+}
