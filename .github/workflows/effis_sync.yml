@@ -1,9 +1,9 @@
 name: EFFIS Fire Sync
 
 on:
-  workflow_dispatch: # Avvio manuale
+  workflow_dispatch:
   schedule:
-    - cron: '0 */3 * * *' # Ogni 3 ore
+    - cron: '0 */3 * * *'
 
 permissions:
   contents: write
@@ -12,24 +12,26 @@ jobs:
   sync-effis:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: 1. Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: 2. Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install dependencies
+      - name: 3. Install dependencies
         run: pip install requests
 
-      - name: Run EFFIS Script
+      - name: 4. Run EFFIS Script
         run: python effis_extractor.py
 
-      - name: Commit and Push
+      - name: 5. Commit and Push
         run: |
           git config --global user.name "EFFIS-Bot"
           git config --global user.email "bot@pcbasilicata.it"
-          git add effis_incendi_attivi.geojson
-          git commit -m "Aggiornamento incendi attivi $(date +'%d/%m/%Y %H:%M')" || echo "Nessun nuovo incendio"
+          # Usiamo il punto per aggiungere tutto ciò che è stato creato
+          git add .
+          # Il comando commit non fallirà se non ci sono cambiamenti
+          git commit -m "Aggiornamento EFFIS: $(date +'%d/%m/%Y %H:%M')" || echo "Nessuna modifica da caricare"
           git push
