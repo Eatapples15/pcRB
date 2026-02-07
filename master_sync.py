@@ -10,10 +10,7 @@ from pyproj import Transformer
 # --- CONFIGURAZIONI ---
 ENDPOINTS = {
     "standard": "https://rsdi.regione.basilicata.it/rbgeoserver2016/ows",
-    "dbgt_0203": "https://rsdi.regione.basilicata.it/rbgeoserver2016/dbgt_0203/wfs",
-    "dbgt_0901": "https://rsdi.regione.basilicata.it/rbgeoserver2016/dbgt_0901/comune_comune_ext/wfs",
-    "dpc_aggregati": "https://raw.githubusercontent.com/pcm-dpc/DPC-Aggregati-Strutturali-ITF-Sud/master/Sud/Basilicata/Basilicata_AggregatoStrutturale.zip",
-    "open_meteo": "https://api.open-meteo.com/v1/forecast"
+    "dpc_aggregati": "https://raw.githubusercontent.com/pcm-dpc/DPC-Aggregati-Strutturali-ITF-Sud/master/Sud/Basilicata/Basilicata_AggregatoStrutturale.zip"
 }
 
 # Mapping Comuni -> Zone Allerta
@@ -29,22 +26,43 @@ def reproject_any(coords):
         return list(TRANSFORMER.transform(coords[0], coords[1]))
     return [reproject_any(c) for c in coords]
 
-# 1. DOWNLOAD CONFINI COMUNALI (Base per tutto)
 def get_base_comuni():
     print("🏙️ Recupero confini comunali da RSDI...")
-    params = {"service": "WFS", "version": "1.1.0", "request": "GetFeature", "typeName": "rsdi:comuni", "outputFormat": "application/json"}
-    r = requests.get(ENDPOINTS["standard"], params=params, timeout=60)
-    data = r.json()
-    for f in data['features']:
-        f['geometry']['coordinates'] = reproject_any(f['geometry']['coordinates'])
-    with open("basilicata_131_comuni.geojson", "w") as f:
-        json.dump(data, f)
-    return data
+    # Proviamo diversi nomi layer possibili sulla RSDI Basilicata
+    possible_layers = ["rsdi:basi_comuni", "rsdi:comuni_pol", "rsdi:limiti_comunali"]
+    
+    for layer in possible_layers:
+        params = {
+            "service": "WFS", "version": "1.1.0", "request": "GetFeature", 
+            "typeName": layer, "outputFormat": "application/json"
+        }
+        try:
+            r = requests.get(ENDPOINTS["standard"], params=params, timeout=60)
+            r.raise_for_status()
+            
+            # Verifichiamo se la risposta è effettivamente un JSON
+            if "application/json" in r.headers.get("Content-Type", ""):
+                data = r.json()
+                for f in data['features']:
+                    f['geometry']['coordinates'] = reproject_any(f['geometry']['coordinates'])
+                with open("basilicata_131_comuni.geojson", "w") as f:
+                    json.dump(data, f)
+                print(f"✅ Confini recuperati con successo usando layer: {layer}")
+                return data
+            else:
+                print(f"⚠️ Il server ha risposto con formato non JSON per {layer}. Messaggio: {r.text[:100]}")
+        except Exception as e:
+            print(f"❌ Fallimento su layer {layer}: {e}")
+            
+    print("🛑 Impossibile trovare il layer dei comuni. Verifica il catalogo RSDI.")
+    return None
 
-# 2. GENERAZIONE ALLERTA OGGI/DOMANI
 def process_alerts(comuni_base):
+    if not comuni_base: return
     print("⛈️ Elaborazione bollettino allerta...")
-    if not os.path.exists("dati_bollettino.json"): return
+    if not os.path.exists("dati_bollettino.json"):
+        print("⚠️ File dati_bollettino.json mancante.")
+        return
     with open("dati_bollettino.json", "r") as f: alert_data = json.load(f)
     
     for p in ['oggi', 'domani']:
@@ -55,35 +73,34 @@ def process_alerts(comuni_base):
             zona = MAPPING_ZONE.get(comune, "N.D.")
             info = alert_data['zone'].get(zona, {"oggi": "green", "domani": "green", "rischio_oggi": "Nessuno", "rischio_domani": "Nessuno"})
             f['properties'].update({
-                "allerta_colore": info[p],
-                "rischio": info[f'rischio_{p}'],
-                "zona": zona,
-                "data_boll": alert_data['data_bollettino']
+                "allerta_colore": info[p], "rischio": info[f'rischio_{p}'], "zona": zona, "data_boll": alert_data['data_bollettino']
             })
             features.append(f)
         with open(f"allerta_{p}.geojson", "w") as out:
             json.dump({"type": "FeatureCollection", "features": features}, out)
 
-# 3. AGGREGATI STRUTTURALI DPC
 def get_aggregati():
     print("🏗️ Scaricamento Aggregati DPC...")
-    r = requests.get(ENDPOINTS["dpc_aggregati"])
-    z = zipfile.ZipFile(io.BytesIO(r.content))
-    z.extractall("temp_dpc")
-    shp_file = [f for f in os.listdir("temp_dpc") if f.endswith(".shp")][0]
-    sf = shapefile.Reader(f"temp_dpc/{shp_file}")
-    geojson = {"type": "FeatureCollection", "features": []}
-    for sr in sf.shapeRecords():
-        coords = [reproject_any(pt) for pt in sr.shape.points]
-        geojson["features"].append({
-            "type": "Feature", "geometry": {"type": "Polygon", "coordinates": [coords]},
-            "properties": sr.record.as_dict()
-        })
-    with open("dpc_aggregati_basilicata.geojson", "w") as f:
-        json.dump(geojson, f)
+    try:
+        r = requests.get(ENDPOINTS["dpc_aggregati"])
+        z = zipfile.ZipFile(io.BytesIO(r.content))
+        z.extractall("temp_dpc")
+        shp_file = [f for f in os.listdir("temp_dpc") if f.endswith(".shp")][0]
+        sf = shapefile.Reader(f"temp_dpc/{shp_file}")
+        agg_geo = {"type": "FeatureCollection", "features": []}
+        for sr in sf.shapeRecords():
+            coords = [reproject_any(pt) for pt in sr.shape.points]
+            agg_geo["features"].append({
+                "type": "Feature", "geometry": {"type": "Polygon", "coordinates": [coords]}, 
+                "properties": sr.record.as_dict()
+            })
+        with open("dpc_aggregati_basilicata.geojson", "w") as f: json.dump(agg_geo, f)
+        print("✅ Aggregati sismici salvati.")
+    except Exception as e: print(f"❌ Errore Aggregati: {e}")
 
 if __name__ == "__main__":
     comuni = get_base_comuni()
-    process_alerts(comuni)
+    if comuni:
+        process_alerts(comuni)
     get_aggregati()
-    print("🏁 Sincronizzazione completata!")
+    print("🏁 Sync terminato.")
